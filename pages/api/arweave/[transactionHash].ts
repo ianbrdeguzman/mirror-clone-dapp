@@ -14,26 +14,55 @@ export default async function (
   try {
     const {transactionHash} = req.query;
 
-    // Get Arweave transaction data. Documentation can be found here: https://github.com/ArweaveTeam/arweave-js
+    // get transaction data from arweave transaction hash
+    const txDataResp = (await arweave.transactions.getData(
+      transactionHash as string,
+      {
+        decode: true,
+        string: true,
+      },
+    )) as string;
 
-    // Get Arweave transaction status. Documentation can be found here: https://github.com/ArweaveTeam/arweave-js
-    const txStatus = undefined;
+    const txData = JSON.parse(txDataResp);
 
+    // get transaction status from arweave transaction hash
+    const txStatusResp = await arweave.transactions.getStatus(
+      transactionHash as string,
+    );
+
+    // confirm transaction status if there are >= 2 confirmation
+    const txStatus =
+      txStatusResp.status === 200 &&
+      txStatusResp.confirmed &&
+      txStatusResp.confirmed.number_of_confirmations >=
+        MIN_NUMBER_OF_CONFIRMATIONS
+        ? TransactionStatusE.CONFIRMED
+        : TransactionStatusE.NOT_CONFIRMED;
+
+    // if transaction status is confirmed
     if (txStatus === TransactionStatusE.CONFIRMED) {
-      // Get Arweave transaction. Documentation can be found here: https://github.com/ArweaveTeam/arweave-js
+      // get transaction tags from transaction hash
+      const tx = await arweave.transactions.get(transactionHash as string);
 
-      // Get Arweave transaction tags. Documentation can be found here: https://github.com/ArweaveTeam/arweave-js
+      const tags = {} as PostTagsT;
 
-      // Get Arweave transaction block in order to retrieve timestamp. Documentation can be found here: https://github.com/ArweaveTeam/arweave-js
+      (tx.get('tags') as any).forEach((tag) => {
+        const key = tag.get('name', {decode: true, string: true});
+        tags[key] = tag.get('value', {decode: true, string: true});
+      });
 
-      // Return JSON response in form:
-      // res.status(200).json({
-      //   id: transactionHash as string,
-      //   data: txData,
-      //   status: txStatus,
-      //   timestamp: block?.timestamp,
-      //   tags,
-      // });
+      // get arweave block by indep hash
+      const block = txStatusResp.confirmed
+        ? await arweave.blocks.get(txStatusResp.confirmed.block_indep_hash)
+        : null;
+
+      res.status(200).json({
+        id: transactionHash as string,
+        data: txData,
+        status: txStatus,
+        timestamp: block?.timestamp,
+        tags,
+      });
     } else {
       res.status(200).json({
         id: transactionHash as string,
