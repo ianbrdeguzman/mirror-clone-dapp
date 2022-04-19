@@ -67,9 +67,14 @@ const CreateEntryForm = (): ReactElement => {
 
           const transactionId = response.data;
 
-          // For Step 6: Mint NFT
-          // Get signer and connect it to smart contract
-          // More information can be found here: https://docs.ethers.io/v5/getting-started/#getting-started--writing
+          // initiate a signer
+          const signer = provider.getSigner();
+          // connect signer with contract
+          const contractWithSigner = contract.connect(signer);
+          // invoke contract createToken method
+          const resp = await contractWithSigner.createToken(transactionId);
+          // wait for transaction to complete
+          const rec = await resp.wait();
 
           if (rec) {
             mutate(routes.api.arweave.search());
